@@ -1,0 +1,74 @@
+import numpy as np # linear algebra
+import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
+
+# Input data files are available in the read-only "../input/" directory
+# For example, running this (by clicking run or pressing Shift+Enter) will list all files under the input directory
+
+import os
+for dirname, _, filenames in os.walk('/kaggle/input'):
+    for filename in filenames:
+        print(os.path.join(dirname, filename)) 
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+
+# Load the dataset
+file_path = '/kaggle/input/bank-customer-churn-prediction/Churn_Modelling.csv'
+df = pd.read_csv(file_path)
+
+# Display samples of the loaded data
+print("Data sample:")
+print(df.head())
+
+# Drop non-informative columns
+df = df.drop(columns=['RowNumber', 'CustomerId', 'Surname'])
+
+# Split features and target
+X = df.drop('Exited', axis=1)
+y = df['Exited']
+
+# Identify categorical and numerical columns
+categorical_cols = X.select_dtypes(include=['object']).columns
+numerical_cols = X.select_dtypes(exclude=['object']).columns
+
+# Preprocess the data: one-hot encode categorical variables and standardize numerical variables
+preprocessor = ColumnTransformer(
+    transformers=[
+        ('num', StandardScaler(), numerical_cols),
+        ('cat', OneHotEncoder(drop='first'), categorical_cols)
+    ])
+
+# Define the model
+model = RandomForestClassifier(n_estimators=100, random_state=42)
+
+# Create a pipeline
+pipeline = Pipeline(steps=[('preprocessor', preprocessor),
+                           ('model', model)])
+
+# Split the data into training and validation sets
+X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Train the model
+pipeline.fit(X_train, y_train)
+
+# Make predictions
+y_pred = pipeline.predict(X_val)
+
+# Evaluate the model
+accuracy = accuracy_score(y_val, y_pred)
+print('Accuracy:', accuracy)
+print('Classification Report:')
+print(classification_report(y_val, y_pred))
+print('Confusion Matrix:')
+print(confusion_matrix(y_val, y_pred))
+
+# Display the most important features
+importances = model.feature_importances_
+feature_names = np.concatenate((numerical_cols, pipeline.named_steps['preprocessor'].named_transformers_['cat'].get_feature_names_out()))
+feature_importances = pd.DataFrame({'feature': feature_names, 'importance': importances})
+print(feature_importances.sort_values(by='importance', ascending=False))
