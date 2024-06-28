@@ -1,0 +1,85 @@
+import numpy as np # linear algebra
+import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
+
+# Input data files are available in the read-only "../input/" directory
+# For example, running this (by clicking run or pressing Shift+Enter) will list all files under the input directory
+
+import os
+for dirname, _, filenames in os.walk('/kaggle/input'):
+    for filename in filenames:
+        print(os.path.join(dirname, filename))import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report
+
+# Load the dataset
+train_file_path = '/kaggle/input/fraud-detection/fraudTrain.csv'
+test_file_path = '/kaggle/input/fraud-detection/fraudTest.csv'
+
+df_train = pd.read_csv(train_file_path)
+df_test = pd.read_csv(test_file_path)
+
+# Display samples of the loaded data
+print("Training data sample:")
+print(df_train.head())
+print("Testing data sample:")
+print(df_test.head())
+
+# Drop non-informative columns
+df_train = df_train.drop(columns=['Unnamed: 0', 'trans_num', 'cc_num'])
+df_test = df_test.drop(columns=['Unnamed: 0', 'trans_num', 'cc_num'])
+
+# Convert 'trans_date_trans_time' to datetime and extract useful features
+df_train['trans_date_trans_time'] = pd.to_datetime(df_train['trans_date_trans_time'])
+df_test['trans_date_trans_time'] = pd.to_datetime(df_test['trans_date_trans_time'])
+
+df_train['trans_year'] = df_train['trans_date_trans_time'].dt.year
+df_train['trans_month'] = df_train['trans_date_trans_time'].dt.month
+df_train['trans_day'] = df_train['trans_date_trans_time'].dt.day
+df_train['trans_hour'] = df_train['trans_date_trans_time'].dt.hour
+
+df_test['trans_year'] = df_test['trans_date_trans_time'].dt.year
+df_test['trans_month'] = df_test['trans_date_trans_time'].dt.month
+df_test['trans_day'] = df_test['trans_date_trans_time'].dt.day
+df_test['trans_hour'] = df_test['trans_date_trans_time'].dt.hour
+
+df_train = df_train.drop(columns=['trans_date_trans_time'])
+df_test = df_test.drop(columns=['trans_date_trans_time'])
+
+# One-hot encode categorical variables
+df_combined = pd.concat([df_train, df_test], axis=0)  # Combine train and test sets
+df_combined = pd.get_dummies(df_combined, columns=['merchant', 'category', 'gender', 'job'])
+
+# Split back into train and test sets
+df_train = df_combined.iloc[:len(df_train)]
+df_test = df_combined.iloc[len(df_train):]
+
+# Ensure both train and test have the same columns after encoding
+df_test = df_test.reindex(columns=df_train.columns, fill_value=0)
+
+# Prepare features and target
+X = df_train.drop('is_fraud', axis=1)
+y = df_train['is_fraud']
+
+# Check data types of X
+print(X.dtypes)
+
+# Convert any remaining non-numeric columns to numeric
+X = X.apply(pd.to_numeric, errors='coerce')  # coerce will convert non-numeric to NaN
+
+# Fill NaN values with 0
+X = X.fillna(0)
+
+# Split the data
+X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Train the model
+model = RandomForestClassifier(n_estimators=100, random_state=42)
+model.fit(X_train, y_train)
+
+# Evaluate the model
+y_pred = model.predict(X_val)
+print('Accuracy:', accuracy_score(y_val, y_pred))
+print('Classification Report:')
+print(classification_report(y_val, y_pred))
