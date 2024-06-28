@@ -1,0 +1,83 @@
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.layers import Embedding, SimpleRNN, Dense
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.optimizers import Adam
+import os
+
+# Load the dataset (you need to download and extract the dataset manually)
+file_path = 'path_to_your_dataset/hkr.txt'  # Update this path to the location of your dataset
+
+with open(file_path, 'r', encoding='utf-8') as f:
+    text = f.read()
+
+# Display dataset sample
+print(f"Dataset length: {len(text)} characters")
+print(f"Sample: {text[:500]}")
+
+# Create a mapping from characters to indices
+chars = sorted(list(set(text)))
+char_to_idx = {char: idx for idx, char in enumerate(chars)}
+idx_to_char = {idx: char for idx, char in enumerate(chars)}
+
+# Vectorize the text
+maxlen = 40  # Length of extracted sequences
+step = 3  # Step size for sampling new sequences
+sequences = []
+next_chars = []
+for i in range(0, len(text) - maxlen, step):
+    sequences.append(text[i: i + maxlen])
+    next_chars.append(text[i + maxlen])
+
+print(f"Number of sequences: {len(sequences)}")
+
+X = np.zeros((len(sequences), maxlen, len(chars)), dtype=np.bool)
+y = np.zeros((len(sequences), len(chars)), dtype=np.bool)
+for i, sequence in enumerate(sequences):
+    for t, char in enumerate(sequence):
+        X[i, t, char_to_idx[char]] = 1
+    y[i, char_to_idx[next_chars[i]]] = 1
+
+# Build the model
+model = Sequential([
+    SimpleRNN(128, input_shape=(maxlen, len(chars)), return_sequences=True),
+    SimpleRNN(128),
+    Dense(len(chars), activation='softmax')
+])
+
+optimizer = Adam(learning_rate=0.01)
+model.compile(loss='categorical_crossentropy', optimizer=optimizer)
+
+# Train the model
+epochs = 20
+batch_size = 128
+
+model.fit(X, y, epochs=epochs, batch_size=batch_size)
+
+# Generate handwritten-like text
+def sample(preds, temperature=1.0):
+    preds = np.asarray(preds).astype('float64')
+    preds = np.log(preds + 1e-8) / temperature
+    exp_preds = np.exp(preds)
+    preds = exp_preds / np.sum(exp_preds)
+    probas = np.random.multinomial(1, preds, 1)
+    return np.argmax(probas)
+
+generated_text = ''
+start_index = np.random.randint(0, len(text) - maxlen - 1)
+sentence = text[start_index: start_index + maxlen]
+generated_text += sentence
+
+for i in range(400):  # Generate 400 characters
+    x_pred = np.zeros((1, maxlen, len(chars)))
+    for t, char in enumerate(sentence):
+        x_pred[0, t, char_to_idx[char]] = 1
+    
+    preds = model.predict(x_pred, verbose=0)[0]
+    next_index = sample(preds, temperature=0.5)
+    next_char = idx_to_char[next_index]
+
+    generated_text += next_char
+    sentence = sentence[1:] + next_char
+
+print(f"Generated text: \n{generated_text}")
